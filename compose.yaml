@@ -20,15 +20,16 @@ services:
       - /bin/sh
       - -ec
       - |
-        mkdir -p /home/bun/.opencodex /home/bun/.codex
+        mkdir -p /home/bun/.opencodex /home/bun/.codex /home/bun/.claude
         if [ ! -f /home/bun/.opencodex/config.json ]; then
           cp /home/bun/app/docker/config.json /home/bun/.opencodex/config.json
         fi
-        chown -R 1000:1000 /home/bun/.opencodex /home/bun/.codex
+        chown -R 1000:1000 /home/bun/.opencodex /home/bun/.codex /home/bun/.claude
 
     volumes:
       - "${OPENCODEX_STATE_DIR:-./data/opencodex}:/home/bun/.opencodex"
       - "${CODEX_STATE_DIR:-./data/codex}:/home/bun/.codex"
+      - "${CLAUDE_STATE_DIR:-./data/claude}:/home/bun/.claude"
 
   hub:
     # Moving tag: follows the newest published stable OpenCodex release.
@@ -49,6 +50,8 @@ services:
       OPENCODEX_HOME: /home/bun/.opencodex
       # A custom CODEX_HOME also requires a matching writable bind mount.
       CODEX_HOME: /home/bun/.codex
+      # Claude Code keeps its independent credentials and settings here.
+      CLAUDE_CONFIG_DIR: /home/bun/.claude
 
     # Loopback by default: make network exposure an explicit choice.
     ports:
@@ -58,6 +61,7 @@ services:
     volumes:
       - "${OPENCODEX_STATE_DIR:-./data/opencodex}:/home/bun/.opencodex"
       - "${CODEX_STATE_DIR:-./data/codex}:/home/bun/.codex"
+      - "${CLAUDE_STATE_DIR:-./data/claude}:/home/bun/.claude"
 
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=64m,mode=1777

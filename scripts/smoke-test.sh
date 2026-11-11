@@ -5,16 +5,22 @@ image=${1:?usage: smoke-test.sh IMAGE}
 name=opencodex-smoke-$$
 ocx_volume=opencodex-smoke-ocx-$$
 codex_volume=opencodex-smoke-codex-$$
+claude_volume=opencodex-smoke-claude-$$
 token=$(openssl rand -hex 32)
 
 cleanup() {
   docker rm -f "$name" >/dev/null 2>&1 || true
-  docker volume rm -f "$ocx_volume" "$codex_volume" >/dev/null 2>&1 || true
+  docker volume rm -f "$ocx_volume" "$codex_volume" "$claude_volume" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT HUP INT TERM
 
 docker volume create "$ocx_volume" >/dev/null
 docker volume create "$codex_volume" >/dev/null
+docker volume create "$claude_volume" >/dev/null
+
+# Dashboard integrations must work as the non-root service user, not merely
+# exist on PATH when a diagnostic is run as root.
+./scripts/verify-packaged-image.sh "$image"
 
 # The upstream image initializes the owner-only API token in its state volume.
 printf '%s\n' "$token" \
@@ -25,6 +31,7 @@ printf '%s\n' "$token" \
 docker run -d --name "$name" \
   -v "$ocx_volume:/home/bun/.opencodex" \
   -v "$codex_volume:/home/bun/.codex" \
+  -v "$claude_volume:/home/bun/.claude" \
   -p 127.0.0.1::10100 \
   "$image" >/dev/null
 

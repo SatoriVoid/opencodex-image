@@ -1,0 +1,46 @@
+
+# Packaging extension maintained by SatoriVoid/opencodex-image.
+#
+# The upstream Dockerfile remains the source of the OpenCodex service. This
+# appended runtime layer deliberately adds the official Codex and Claude Code
+# client executables so that the dashboard can launch Codex app-server and can
+# support future Claude Code configuration. Both artifacts are architecture
+# specific, version-pinned, and SHA-256 verified; no credentials are installed.
+USER root
+
+ARG TARGETARCH
+ARG CODEX_VERSION=0.167.1
+ARG CLAUDE_CODE_VERSION=2.1.322
+
+# Codex is Apache-2.0. The official release package includes the CLI together
+# with its adjacent support files; do not copy only the executable.
+# Claude Code is proprietary software subject to Anthropic's terms. Its binary
+# is present solely as an unauthenticated client; credentials remain in the
+# separately mounted user home at runtime.
+RUN set -eux; \
+    apt-get update -qq; \
+    apt-get install -y --no-install-recommends ca-certificates curl libstdc++6; \
+    rm -rf /var/lib/apt/lists/*; \
+    case "$TARGETARCH" in \
+      amd64) codex_asset='codex-package-x86_64-unknown-linux-musl.tar.gz'; codex_sha256='a945df3df83e849dd7b74787e27f8a459c1946b0e3afe3dc8eef8a8d1845fd4f'; claude_platform='linux-x64'; claude_sha256='bfb3703ad5380242328459bc62ada4bde8ae7ba57c6e1eeadb9c00e08874c478' ;; \
+      arm64) codex_asset='codex-package-aarch64-unknown-linux-musl.tar.gz'; codex_sha256='ef3e1443a7795d596f1601a533d7225a1030488d60c965af1f0610ab95889031'; claude_platform='linux-arm64'; claude_sha256='f220ca50ea4f3222043ff83cc224a1262e0196e9897acc0871efa94235b0c1fd' ;; \
+      *) echo "Unsupported TARGETARCH: $TARGETARCH" >&2; exit 1 ;; \
+    esac; \
+    curl -fsSL "https://github.com/openai/codex/releases/download/rust-v${CODEX_VERSION}/${codex_asset}" -o /tmp/codex.tar.gz; \
+    printf '%s  %s\n' "$codex_sha256" /tmp/codex.tar.gz | sha256sum -c -; \
+    install -d -m 0755 /opt/codex; \
+    tar -xzf /tmp/codex.tar.gz -C /opt/codex; \
+    ln -s /opt/codex/bin/codex /usr/local/bin/codex; \
+    curl -fsSL "https://downloads.claude.ai/claude-code-releases/${CLAUDE_CODE_VERSION}/${claude_platform}/claude" -o /usr/local/bin/claude; \
+    printf '%s  %s\n' "$claude_sha256" /usr/local/bin/claude | sha256sum -c -; \
+    chmod 0755 /usr/local/bin/claude; \
+    rm -f /tmp/codex.tar.gz; \
+    install -d -m 0700 -o bun -g bun /home/bun/.claude
+
+ENV CLAUDE_CONFIG_DIR=/home/bun/.claude \
+    DISABLE_AUTOUPDATER=1
+
+USER bun
+RUN ["codex", "--version"]
+RUN ["codex", "app-server", "--help"]
+RUN ["claude", "--version"]

@@ -78,6 +78,9 @@ jobs:
           actual_commit=$(git -C upstream rev-parse HEAD)
           test "$actual_commit" = "$EXPECTED_COMMIT"
 
+      - name: Add pinned Codex and Claude Code runtimes
+        run: ./scripts/prepare-tools-dockerfile.sh upstream
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
 
@@ -88,7 +91,7 @@ jobs:
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: ./upstream
-          file: ./upstream/Dockerfile
+          file: ./upstream/Dockerfile.packaged
           platforms: linux/amd64
           load: true
           push: false
@@ -98,7 +101,7 @@ jobs:
           cache-from: type=gha,scope=opencodex-${{ needs.resolve.outputs.version }}
           cache-to: type=gha,mode=max,scope=opencodex-${{ needs.resolve.outputs.version }}
 
-      - name: Smoke test HTTP endpoints
+      - name: Smoke test HTTP endpoints and bundled runtimes
         run: ./scripts/smoke-test.sh opencodex-smoke:amd64
 
   publish:
@@ -126,6 +129,9 @@ jobs:
           actual_commit=$(git -C upstream rev-parse HEAD)
           test "$actual_commit" = "$EXPECTED_COMMIT"
 
+      - name: Add pinned Codex and Claude Code runtimes
+        run: ./scripts/prepare-tools-dockerfile.sh upstream
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
 
@@ -144,7 +150,7 @@ jobs:
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: ./upstream
-          file: ./upstream/Dockerfile
+          file: ./upstream/Dockerfile.packaged
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |
@@ -154,9 +160,13 @@ jobs:
             ghcr.io/satorivoid/opencodex:latest
             ghcr.io/satorivoid/opencodex:upstream-${{ needs.resolve.outputs.commit }}
           labels: |
-            org.opencontainers.image.source=https://github.com/lidge-jun/opencodex
-            org.opencontainers.image.revision=${{ needs.resolve.outputs.commit }}
+            org.opencontainers.image.source=https://github.com/SatoriVoid/opencodex-image
+            org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.version=${{ needs.resolve.outputs.version }}
+            org.opencontainers.image.base.name=ghcr.io/satorivoid/opencodex
+            io.satorivoid.opencodex.upstream.revision=${{ needs.resolve.outputs.commit }}
+            io.satorivoid.opencodex.codex.version=0.167.1
+            io.satorivoid.opencodex.claude-code.version=2.1.322
           build-args: |
             BUILDKIT_CONTEXT_KEEP_GIT_DIR=1
           provenance: mode=max
@@ -191,13 +201,22 @@ jobs:
 
           - Upstream tag: \`v${VERSION}\`
           - Upstream commit: \`${COMMIT}\`
+          - Bundled Codex CLI: \`0.167.1\` (official package, SHA-256 verified at build time)
+          - Bundled Claude Code: \`2.1.322\` (official binary, SHA-256 verified at build time)
           - Immutable image: \`ghcr.io/satorivoid/opencodex@${DIGEST}\`
           - Platforms: \`linux/amd64\`, \`linux/arm64\`
           - BuildKit SBOM and provenance: attached to the OCI image
           - GitHub provenance attestation: verify with \`gh attestation verify oci://ghcr.io/satorivoid/opencodex@${DIGEST} -R SatoriVoid/opencodex-image\`
           EOF
-          gh release create "v${VERSION}" \
-            --repo "$GITHUB_REPOSITORY" \
-            --target "$GITHUB_SHA" \
-            --title "v${VERSION}" \
-            --notes-file notes.md
+          if gh release view "v${VERSION}" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release edit "v${VERSION}" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "v${VERSION}" \
+              --notes-file notes.md
+          else
+            gh release create "v${VERSION}" \
+              --repo "$GITHUB_REPOSITORY" \
+              --target "$GITHUB_SHA" \
+              --title "v${VERSION}" \
+              --notes-file notes.md
+          fi
