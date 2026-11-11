@@ -1,0 +1,36 @@
+name: opencodex
+
+services:
+  hub:
+    # Replace with an immutable digest from SatoriVoid/opencodex-image Releases.
+    image: ghcr.io/satorivoid/opencodex@sha256:REPLACE_WITH_RELEASE_DIGEST
+    pull_policy: always
+    init: true
+    read_only: true
+    restart: unless-stopped
+    stop_grace_period: 30s
+
+    # Keep this bound to loopback unless a reverse proxy, Tailscale, or LAN policy
+    # deliberately requires another address.
+    ports:
+      - "${OPENCODEX_BIND_ADDRESS:-127.0.0.1}:${OPENCODEX_PORT:-10100}:10100"
+
+    environment:
+      CODEX_HOME: /home/bun/.codex
+
+    volumes:
+      - ocx-state:/home/bun/.opencodex
+      - codex-state:/home/bun/.codex
+
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+
+    security_opt:
+      - no-new-privileges:true
+
+    cap_drop:
+      - ALL
+
+volumes:
+  ocx-state:
+  codex-state:

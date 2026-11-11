@@ -1,0 +1,203 @@
+name: Release OpenCodex image
+
+on:
+  schedule:
+    - cron: "17 */6 * * *"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Stable OpenCodex version (empty = npm latest)"
+        required: false
+        type: string
+      force_rebuild:
+        description: "Rebuild even if this upstream version already has a release"
+        required: true
+        default: false
+        type: boolean
+
+permissions: {}
+
+concurrency:
+  group: opencodex-release-${{ inputs.version || 'latest' }}
+  cancel-in-progress: false
+
+jobs:
+  resolve:
+    name: Resolve immutable upstream source
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.upstream.outputs.version }}
+      major: ${{ steps.upstream.outputs.major }}
+      minor: ${{ steps.upstream.outputs.minor }}
+      commit: ${{ steps.upstream.outputs.commit }}
+      skip: ${{ steps.release.outputs.skip }}
+    steps:
+      - name: Checkout packaging repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Resolve npm version and matching Git tag
+        id: upstream
+        env:
+          REQUESTED_VERSION: ${{ inputs.version || '' }}
+        run: ./scripts/resolve-upstream.sh "$REQUESTED_VERSION"
+
+      - name: Skip already published version
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.upstream.outputs.version }}
+          FORCE_REBUILD: ${{ inputs.force_rebuild || false }}
+        run: |
+          if [ "$FORCE_REBUILD" != "true" \
+            && gh release view "upstream-v${VERSION}" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "OpenCodex ${VERSION} is already published; skipping."
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  build_and_test:
+    name: Build and smoke-test
+    needs: resolve
+    if: needs.resolve.outputs.skip != 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout packaging repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Checkout exact upstream tag
+        env:
+          VERSION: ${{ needs.resolve.outputs.version }}
+          EXPECTED_COMMIT: ${{ needs.resolve.outputs.commit }}
+        run: |
+          git clone --depth 1 --branch "v${VERSION}" https://github.com/lidge-jun/opencodex.git upstream
+          actual_commit=$(git -C upstream rev-parse HEAD)
+          test "$actual_commit" = "$EXPECTED_COMMIT"
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
+
+      - name: Build amd64 image for smoke test
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: ./upstream
+          file: ./upstream/Dockerfile
+          platforms: linux/amd64
+          load: true
+          push: false
+          tags: opencodex-smoke:amd64
+          build-args: |
+            BUILDKIT_CONTEXT_KEEP_GIT_DIR=1
+          cache-from: type=gha,scope=opencodex-${{ needs.resolve.outputs.version }}
+          cache-to: type=gha,mode=max,scope=opencodex-${{ needs.resolve.outputs.version }}
+
+      - name: Smoke test HTTP endpoints
+        run: ./scripts/smoke-test.sh opencodex-smoke:amd64
+
+  publish:
+    name: Publish multi-architecture image
+    needs: [resolve, build_and_test]
+    if: needs.resolve.outputs.skip != 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
+    outputs:
+      digest: ${{ steps.push.outputs.digest }}
+    steps:
+      - name: Checkout packaging repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Checkout exact upstream tag
+        env:
+          VERSION: ${{ needs.resolve.outputs.version }}
+          EXPECTED_COMMIT: ${{ needs.resolve.outputs.commit }}
+        run: |
+          git clone --depth 1 --branch "v${VERSION}" https://github.com/lidge-jun/opencodex.git upstream
+          actual_commit=$(git -C upstream rev-parse HEAD)
+          test "$actual_commit" = "$EXPECTED_COMMIT"
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Build and push
+        id: push
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: ./upstream
+          file: ./upstream/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/opencodex:${{ needs.resolve.outputs.version }}
+            ghcr.io/${{ github.repository_owner }}/opencodex:${{ needs.resolve.outputs.minor }}
+            ghcr.io/${{ github.repository_owner }}/opencodex:${{ needs.resolve.outputs.major }}
+            ghcr.io/${{ github.repository_owner }}/opencodex:latest
+            ghcr.io/${{ github.repository_owner }}/opencodex:upstream-${{ needs.resolve.outputs.commit }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/lidge-jun/opencodex
+            org.opencontainers.image.revision=${{ needs.resolve.outputs.commit }}
+            org.opencontainers.image.version=${{ needs.resolve.outputs.version }}
+          build-args: |
+            BUILDKIT_CONTEXT_KEEP_GIT_DIR=1
+          provenance: mode=max
+          sbom: true
+          cache-from: type=gha,scope=opencodex-${{ needs.resolve.outputs.version }}
+          cache-to: type=gha,mode=max,scope=opencodex-${{ needs.resolve.outputs.version }}
+
+      - name: Attest image provenance
+        uses: actions/attest-build-provenance@43d14bc2b83dec42d39ecae14e916627a18bb661 # v3
+        with:
+          subject-name: ghcr.io/${{ github.repository_owner }}/opencodex
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
+
+  release:
+    name: Create release record
+    needs: [resolve, publish]
+    if: needs.resolve.outputs.skip != 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.resolve.outputs.version }}
+          COMMIT: ${{ needs.resolve.outputs.commit }}
+          DIGEST: ${{ needs.publish.outputs.digest }}
+        run: |
+          cat > notes.md <<EOF
+          ## OpenCodex ${VERSION}
+
+          - Upstream tag: \`v${VERSION}\`
+          - Upstream commit: \`${COMMIT}\`
+          - Immutable image: \`ghcr.io/satorivoid/opencodex@${DIGEST}\`
+          - Platforms: \`linux/amd64\`, \`linux/arm64\`
+          - BuildKit SBOM and provenance: attached to the OCI image
+          - GitHub provenance attestation: verify with \`gh attestation verify oci://ghcr.io/satorivoid/opencodex@${DIGEST} -R SatoriVoid/opencodex-image\`
+          EOF
+          gh release create "upstream-v${VERSION}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "OpenCodex ${VERSION}" \
+            --notes-file notes.md
