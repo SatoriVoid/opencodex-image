@@ -50,7 +50,7 @@ jobs:
           VERSION: ${{ steps.upstream.outputs.version }}
           FORCE_REBUILD: ${{ inputs.force_rebuild || false }}
         run: |
-          if [ "$FORCE_REBUILD" != "true" \
+          if [ "$FORCE_REBUILD" != "true" ] \
             && gh release view "upstream-v${VERSION}" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             echo "skip=true" >> "$GITHUB_OUTPUT"
             echo "OpenCodex ${VERSION} is already published; skipping."
@@ -148,11 +148,11 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |
-            ghcr.io/${{ github.repository_owner }}/opencodex:${{ needs.resolve.outputs.version }}
-            ghcr.io/${{ github.repository_owner }}/opencodex:${{ needs.resolve.outputs.minor }}
-            ghcr.io/${{ github.repository_owner }}/opencodex:${{ needs.resolve.outputs.major }}
-            ghcr.io/${{ github.repository_owner }}/opencodex:latest
-            ghcr.io/${{ github.repository_owner }}/opencodex:upstream-${{ needs.resolve.outputs.commit }}
+            ghcr.io/satorivoid/opencodex:${{ needs.resolve.outputs.version }}
+            ghcr.io/satorivoid/opencodex:${{ needs.resolve.outputs.minor }}
+            ghcr.io/satorivoid/opencodex:${{ needs.resolve.outputs.major }}
+            ghcr.io/satorivoid/opencodex:latest
+            ghcr.io/satorivoid/opencodex:upstream-${{ needs.resolve.outputs.commit }}
           labels: |
             org.opencontainers.image.source=https://github.com/lidge-jun/opencodex
             org.opencontainers.image.revision=${{ needs.resolve.outputs.commit }}
@@ -167,7 +167,7 @@ jobs:
       - name: Attest image provenance
         uses: actions/attest-build-provenance@43d14bc2b83dec42d39ecae14e916627a18bb661 # v3
         with:
-          subject-name: ghcr.io/${{ github.repository_owner }}/opencodex
+          subject-name: ghcr.io/satorivoid/opencodex
           subject-digest: ${{ steps.push.outputs.digest }}
           push-to-registry: true
 
