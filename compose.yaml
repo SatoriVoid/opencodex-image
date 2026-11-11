@@ -2,20 +2,19 @@ name: opencodex
 
 services:
   hub:
-    # Replace with an immutable digest from SatoriVoid/opencodex-image Releases.
-    image: ghcr.io/satorivoid/opencodex@sha256:REPLACE_WITH_RELEASE_DIGEST
+    image: ghcr.io/satorivoid/opencodex:latest
     pull_policy: always
     init: true
     read_only: true
     restart: unless-stopped
     stop_grace_period: 30s
 
-    # Keep this bound to loopback unless a reverse proxy, Tailscale, or LAN policy
-    # deliberately requires another address.
+    # By default the service is reachable only from this host.
     ports:
       - "${OPENCODEX_BIND_ADDRESS:-127.0.0.1}:${OPENCODEX_PORT:-10100}:10100"
 
     environment:
+      # A custom CODEX_HOME also requires a matching writable volume target.
       CODEX_HOME: /home/bun/.codex
 
     volumes:
