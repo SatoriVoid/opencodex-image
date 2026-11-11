@@ -1,63 +1,54 @@
-# OpenCodex Image Factory
+# OpenCodex Docker Image
 
 [![Release OpenCodex image](https://github.com/SatoriVoid/opencodex-image/actions/workflows/release.yml/badge.svg)](https://github.com/SatoriVoid/opencodex-image/actions/workflows/release.yml)
 
 [English](README.md) · Русский
 
-Минимальный воспроизводимый конвейер сборки контейнерных образов для [OpenCodex](https://github.com/lidge-jun/opencodex).
-
-Он собирает OpenCodex из неизменяемого upstream Git tag и публикует multi-architecture образы в GitHub Container Registry. Этот репозиторий содержит только CI и упаковку: исходный код OpenCodex не форкается и не изменяется.
-
-## Образы
+Готовые multi-platform контейнерные образы для [OpenCodex](https://github.com/lidge-jun/opencodex). Сам OpenCodex не публикует официальный образ; этот репозиторий без изменений собирает upstream `Dockerfile` и публикует результат в GitHub Container Registry.
 
 ```text
 ghcr.io/satorivoid/opencodex
 ```
 
-| Платформа | Поддержка |
-| --- | --- |
-| `linux/amd64` | Да |
-| `linux/arm64` | Да |
+Поддерживаются `linux/amd64` и `linux/arm64`.
 
-## Гарантии
+## Быстрый старт
 
-- npm-версия upstream сопоставляется с неизменяемым Git tag и commit SHA.
-- Образ собирается из upstream `Dockerfile`.
-- Каждый релиз проходит HTTP smoke-test до публикации.
-- К OCI-образу прикрепляются BuildKit SBOM и provenance.
-- GitHub Actions публикует provenance attestation.
-
-## Теги и развёртывание
-
-Workflow публикует теги версии, minor-версии, major-версии, `latest` и `upstream-<commit>`.
-
-Для любого реального развёртывания используй immutable digest из соответствующего GitHub Release:
-
-```yaml
-image: ghcr.io/satorivoid/opencodex@sha256:<digest>
-```
-
-Не разворачивай `latest`.
-
-## Сборка релиза
-
-Открой **Actions → Release OpenCodex image → Run workflow**.
-
-- Оставь `version` пустым, чтобы получить текущую стабильную npm-версию.
-- Используй `force_rebuild` только для повторной сборки уже выпущенной upstream-версии.
-
-Плановая проверка выполняется каждые шесть часов и пропускает версии, уже записанные как релизы.
-
-## Быстрый старт с Docker Compose
-
-Скопируй [`compose.example.yaml`](compose.example.yaml), подставь digest, затем до первого старта инициализируй локальный service token:
+1. Скопируй [`compose.example.yaml`](compose.example.yaml) в `compose.yaml`.
+2. Подставь вместо `REPLACE_WITH_RELEASE_DIGEST` digest нужного [релиза](https://github.com/SatoriVoid/opencodex-image/releases).
+3. Инициализируй service token и запусти сервис:
 
 ```bash
 openssl rand -hex 32 | docker compose run --rm -T hub bun run docker/bootstrap-token.ts
 docker compose up -d
 ```
 
-Сохрани сгенерированный token в настройках клиентов, которые обращаются к сервису. Не коммить его в Git.
+Сохрани созданный token в конфигурации клиентов, которые обращаются к сервису. Не коммить его.
+
+## Теги образа
+
+| Ссылка | Назначение |
+| --- | --- |
+| `:2.100.2` | Точный релиз OpenCodex |
+| `:2.100` | Последний patch-релиз в ветке minor |
+| `:2` | Последний minor-релиз в major-ветке |
+| `:latest` | Последний опубликованный стабильный релиз |
+| `@sha256:…` | Неизменяемая ссылка для развёртывания |
+
+Для production используй immutable digest из GitHub Release:
+
+```yaml
+image: ghcr.io/satorivoid/opencodex@sha256:<digest>
+```
+
+`latest` удобен для проверки, но не для фиксированного развёртывания.
+
+## Что проверяется
+
+- npm-релиз сопоставляется с неизменяемыми upstream Git tag и commit.
+- Образ собирается из upstream `Dockerfile` и проходит smoke-test до публикации.
+- Каждый опубликованный образ получает SBOM и BuildKit provenance.
+- Для каждого релиза публикуется GitHub provenance attestation.
 
 ## Проверка provenance
 
@@ -69,7 +60,7 @@ gh attestation verify \
 
 ## Откат
 
-Разверни digest из предыдущего GitHub Release. На целевом хосте пересобирать образ не требуется.
+Выбери digest из предыдущего [релиза](https://github.com/SatoriVoid/opencodex-image/releases) и разверни его. На целевой машине пересобирать образ не нужно.
 
 ## Upstream
 

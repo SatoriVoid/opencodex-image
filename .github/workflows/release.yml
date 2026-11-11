@@ -51,7 +51,7 @@ jobs:
           FORCE_REBUILD: ${{ inputs.force_rebuild || false }}
         run: |
           if [ "$FORCE_REBUILD" != "true" ] \
-            && gh release view "upstream-v${VERSION}" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            && gh release view "v${VERSION}" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             echo "skip=true" >> "$GITHUB_OUTPUT"
             echo "OpenCodex ${VERSION} is already published; skipping."
           else
@@ -196,8 +196,8 @@ jobs:
           - BuildKit SBOM and provenance: attached to the OCI image
           - GitHub provenance attestation: verify with \`gh attestation verify oci://ghcr.io/satorivoid/opencodex@${DIGEST} -R SatoriVoid/opencodex-image\`
           EOF
-          gh release create "upstream-v${VERSION}" \
+          gh release create "v${VERSION}" \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
-            --title "OpenCodex ${VERSION}" \
+            --title "v${VERSION}" \
             --notes-file notes.md

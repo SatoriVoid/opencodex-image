@@ -1,56 +1,22 @@
-# OpenCodex Image Factory
+# OpenCodex Docker Image
 
 [![Release OpenCodex image](https://github.com/SatoriVoid/opencodex-image/actions/workflows/release.yml/badge.svg)](https://github.com/SatoriVoid/opencodex-image/actions/workflows/release.yml)
 
 English · [Русский](README.ru.md)
 
-A minimal, reproducible container-image pipeline for [OpenCodex](https://github.com/lidge-jun/opencodex).
-
-It builds OpenCodex from an immutable upstream Git tag and publishes multi-architecture images to GitHub Container Registry. This repository contains packaging and CI only; it does not fork or modify OpenCodex itself.
-
-## Images
+Ready-to-run, multi-platform container images for [OpenCodex](https://github.com/lidge-jun/opencodex). OpenCodex does not publish an official image; this repository builds the upstream `Dockerfile` unchanged and publishes it to GitHub Container Registry.
 
 ```text
 ghcr.io/satorivoid/opencodex
 ```
 
-| Platform | Supported |
-| --- | --- |
-| `linux/amd64` | Yes |
-| `linux/arm64` | Yes |
+Supports `linux/amd64` and `linux/arm64`.
 
-## Guarantees
+## Quick start
 
-- Upstream npm version is resolved to a matching immutable Git tag and commit SHA.
-- The image is built from the upstream `Dockerfile`.
-- Every release passes an HTTP smoke test before publication.
-- BuildKit SBOM and provenance are attached to the OCI image.
-- GitHub Actions publishes a provenance attestation.
-
-## Tags and deployment
-
-The workflow publishes version, minor, major, `latest`, and `upstream-<commit>` tags.
-
-For any real deployment, pin the immutable digest from the corresponding GitHub Release:
-
-```yaml
-image: ghcr.io/satorivoid/opencodex@sha256:<digest>
-```
-
-Do not deploy `latest`.
-
-## Build a release
-
-Open **Actions → Release OpenCodex image → Run workflow**.
-
-- Leave `version` empty to resolve the current stable npm release.
-- Use `force_rebuild` only when rebuilding an already released upstream version.
-
-A scheduled check runs every six hours and skips versions already recorded as releases.
-
-## Quick start with Docker Compose
-
-Copy [`compose.example.yaml`](compose.example.yaml), replace the digest, then initialize the local service token before the first start:
+1. Copy [`compose.example.yaml`](compose.example.yaml) to `compose.yaml`.
+2. Replace `REPLACE_WITH_RELEASE_DIGEST` with the digest from the [release](https://github.com/SatoriVoid/opencodex-image/releases) you want.
+3. Initialize the service token, then start the service:
 
 ```bash
 openssl rand -hex 32 | docker compose run --rm -T hub bun run docker/bootstrap-token.ts
@@ -58,6 +24,31 @@ docker compose up -d
 ```
 
 Keep the generated token in the configuration of clients that access the service. Do not commit it.
+
+## Image tags
+
+| Reference | Purpose |
+| --- | --- |
+| `:2.100.2` | Exact OpenCodex release |
+| `:2.100` | Latest patch release in a minor series |
+| `:2` | Latest minor release in a major series |
+| `:latest` | Latest published stable release |
+| `@sha256:…` | Immutable deployment reference |
+
+For production, deploy the immutable digest from a GitHub Release:
+
+```yaml
+image: ghcr.io/satorivoid/opencodex@sha256:<digest>
+```
+
+`latest` is convenient for evaluation, not for a pinned deployment.
+
+## What is verified
+
+- The npm release is resolved to an immutable upstream Git tag and commit.
+- The image is built from the upstream `Dockerfile` and smoke-tested before publishing.
+- Every published image includes an SBOM and BuildKit provenance.
+- A GitHub provenance attestation is published for each release.
 
 ## Verify provenance
 
@@ -69,7 +60,7 @@ gh attestation verify \
 
 ## Rollback
 
-Redeploy a digest from an earlier GitHub Release. No image build is needed on the target host.
+Select a digest from an earlier [release](https://github.com/SatoriVoid/opencodex-image/releases) and redeploy it. No build is needed on the target host.
 
 ## Upstream
 
