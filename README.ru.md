@@ -29,32 +29,37 @@ cd opencodex-image
 
 ```bash
 mkdir -p data/opencodex data/codex secrets
-sudo chown -R 1000:1000 data
 
 umask 077
 openssl rand -hex 32 > secrets/opencodex_api_token
 chmod 600 secrets/opencodex_api_token
 ```
 
-OpenCodex внутри контейнера работает от UID `1000` (`bun`), поэтому bind-mounted директории `data` должны быть доступны на запись этому UID. На Linux-хосте их готовит команда `chown` выше.
-
-### 3. Инициализируй token
+### 3. Подготовь bind-mounted состояние
 
 ```bash
-docker compose run --rm -T hub \
+docker compose up init --abort-on-container-exit
+```
+
+Короткоживущий сервис `init` кладёт в состояние конфигурацию upstream-контейнера и выставляет права для OpenCodex. Это также даёт bind mounts работать с rootless Docker без `sudo` на хосте.
+
+### 4. Инициализируй token
+
+```bash
+docker compose run --rm --no-deps -T hub \
   bun run docker/bootstrap-token.ts \
   < secrets/opencodex_api_token
 ```
 
 Token сохраняется в `data/opencodex`. Сохрани `secrets/opencodex_api_token`: он нужен клиентам для аутентифицированного доступа. Оба пути исключены из Git.
 
-### 4. Запусти OpenCodex
+### 5. Запусти OpenCodex
 
 ```bash
-docker compose up -d
+docker compose up -d hub
 ```
 
-### 5. Проверь готовность
+### 6. Проверь готовность
 
 ```bash
 curl --fail --silent http://127.0.0.1:10100/healthz

@@ -1,6 +1,35 @@
 name: opencodex
 
 services:
+  # A short-lived service that prepares the bind-mounted state directories.
+  # It runs as root only inside the container/user namespace, then exits.
+  init:
+    image: ghcr.io/satorivoid/opencodex:latest
+    pull_policy: always
+    user: "0:0"
+    read_only: true
+    restart: "no"
+
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+
+    entrypoint:
+      - /bin/sh
+      - -ec
+      - |
+        mkdir -p /home/bun/.opencodex /home/bun/.codex
+        if [ ! -f /home/bun/.opencodex/config.json ]; then
+          cp /home/bun/app/docker/config.json /home/bun/.opencodex/config.json
+        fi
+        chown -R 1000:1000 /home/bun/.opencodex /home/bun/.codex
+
+    volumes:
+      - "${OPENCODEX_STATE_DIR:-./data/opencodex}:/home/bun/.opencodex"
+      - "${CODEX_STATE_DIR:-./data/codex}:/home/bun/.codex"
+
   hub:
     # Moving tag: follows the newest published stable OpenCodex release.
     image: ghcr.io/satorivoid/opencodex:latest
@@ -9,6 +38,10 @@ services:
     read_only: true
     restart: unless-stopped
     stop_grace_period: 30s
+
+    depends_on:
+      init:
+        condition: service_completed_successfully
 
     environment:
       NODE_ENV: production

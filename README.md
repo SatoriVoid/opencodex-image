@@ -29,32 +29,37 @@ The repository includes a ready-to-run [`compose.yaml`](compose.yaml). It uses `
 
 ```bash
 mkdir -p data/opencodex data/codex secrets
-sudo chown -R 1000:1000 data
 
 umask 077
 openssl rand -hex 32 > secrets/opencodex_api_token
 chmod 600 secrets/opencodex_api_token
 ```
 
-OpenCodex runs in the container as UID `1000` (`bun`), so the bind-mounted `data` directories must be writable by that UID. On a Linux host, the `chown` command above prepares them.
-
-### 3. Initialize the token
+### 3. Prepare the bind-mounted state
 
 ```bash
-docker compose run --rm -T hub \
+docker compose up init --abort-on-container-exit
+```
+
+The short-lived `init` service seeds the upstream container configuration and sets ownership for OpenCodex. This also makes the bind mounts work with rootless Docker without requiring `sudo` on the host.
+
+### 4. Initialize the token
+
+```bash
+docker compose run --rm --no-deps -T hub \
   bun run docker/bootstrap-token.ts \
   < secrets/opencodex_api_token
 ```
 
 The token is stored in `data/opencodex`. Keep `secrets/opencodex_api_token`: clients use it for authenticated access. Both paths are excluded from Git.
 
-### 4. Start OpenCodex
+### 5. Start OpenCodex
 
 ```bash
-docker compose up -d
+docker compose up -d hub
 ```
 
-### 5. Check readiness
+### 6. Check readiness
 
 ```bash
 curl --fail --silent http://127.0.0.1:10100/healthz
