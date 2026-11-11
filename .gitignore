@@ -1,0 +1,10 @@
+# Local secrets and generated state
+secrets/
+.env
+.env.*
+!.env.example
+
+# Editor / operating-system files
+.DS_Store
+.idea/
+.vscode/
