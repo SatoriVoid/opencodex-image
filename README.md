@@ -23,34 +23,30 @@ git clone https://github.com/SatoriVoid/opencodex-image.git
 cd opencodex-image
 ```
 
-The repository includes a ready-to-run [`compose.yaml`](compose.yaml). It uses `ghcr.io/satorivoid/opencodex:latest` and keeps OpenCodex state in Docker volumes.
+The repository includes a ready-to-run [`compose.yaml`](compose.yaml). It uses `ghcr.io/satorivoid/opencodex:latest` and stores OpenCodex state in host directories under `./data`.
 
-### 2. Configure the host binding
-
-```bash
-cp .env.example .env
-```
-
-The default `.env` keeps OpenCodex available only from this machine:
-
-```dotenv
-OPENCODEX_BIND_ADDRESS=127.0.0.1
-OPENCODEX_PORT=10100
-```
-
-### 3. Create the API token
+### 2. Create persistent directories and an API token
 
 ```bash
-mkdir -p secrets
+mkdir -p data/opencodex data/codex secrets
+sudo chown -R 1000:1000 data
+
 umask 077
 openssl rand -hex 32 > secrets/opencodex_api_token
+chmod 600 secrets/opencodex_api_token
+```
 
+OpenCodex runs in the container as UID `1000` (`bun`), so the bind-mounted `data` directories must be writable by that UID. On a Linux host, the `chown` command above prepares them.
+
+### 3. Initialize the token
+
+```bash
 docker compose run --rm -T hub \
   bun run docker/bootstrap-token.ts \
   < secrets/opencodex_api_token
 ```
 
-The token is stored in the OpenCodex state volume. Keep `secrets/opencodex_api_token`: clients use it for authenticated access. The file is excluded from Git.
+The token is stored in `data/opencodex`. Keep `secrets/opencodex_api_token`: clients use it for authenticated access. Both paths are excluded from Git.
 
 ### 4. Start OpenCodex
 
@@ -67,12 +63,24 @@ curl --fail --silent http://127.0.0.1:10100/readyz
 
 ## Configuration
 
-Docker Compose reads non-secret host settings from `.env`.
+`compose.yaml` works without `.env`. Create `.env` next to it only when you need to override network or host paths:
+
+```dotenv
+# Network exposure
+OPENCODEX_BIND_ADDRESS=127.0.0.1
+OPENCODEX_PORT=10100
+
+# Persistent state on the host
+OPENCODEX_STATE_DIR=./data/opencodex
+CODEX_STATE_DIR=./data/codex
+```
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `OPENCODEX_BIND_ADDRESS` | `127.0.0.1` | Host address that publishes OpenCodex. |
 | `OPENCODEX_PORT` | `10100` | Host port mapped to OpenCodex port `10100` inside the container. |
+| `OPENCODEX_STATE_DIR` | `./data/opencodex` | OpenCodex configuration, API token, and persistent state. |
+| `CODEX_STATE_DIR` | `./data/codex` | Codex state used by OpenCodex. |
 
 ### Access modes
 

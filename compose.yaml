@@ -2,6 +2,7 @@ name: opencodex
 
 services:
   hub:
+    # Moving tag: follows the newest published stable OpenCodex release.
     image: ghcr.io/satorivoid/opencodex:latest
     pull_policy: always
     init: true
@@ -9,27 +10,27 @@ services:
     restart: unless-stopped
     stop_grace_period: 30s
 
-    # By default the service is reachable only from this host.
+    environment:
+      NODE_ENV: production
+      OCX_SERVICE: "1"
+      OPENCODEX_HOME: /home/bun/.opencodex
+      # A custom CODEX_HOME also requires a matching writable bind mount.
+      CODEX_HOME: /home/bun/.codex
+
+    # Loopback by default: make network exposure an explicit choice.
     ports:
       - "${OPENCODEX_BIND_ADDRESS:-127.0.0.1}:${OPENCODEX_PORT:-10100}:10100"
 
-    environment:
-      # A custom CODEX_HOME also requires a matching writable volume target.
-      CODEX_HOME: /home/bun/.codex
-
+    # Persistent state is visible and manageable on the host.
     volumes:
-      - ocx-state:/home/bun/.opencodex
-      - codex-state:/home/bun/.codex
+      - "${OPENCODEX_STATE_DIR:-./data/opencodex}:/home/bun/.opencodex"
+      - "${CODEX_STATE_DIR:-./data/codex}:/home/bun/.codex"
 
     tmpfs:
-      - /tmp:size=64m,mode=1777
+      - /tmp:rw,noexec,nosuid,size=64m,mode=1777
 
     security_opt:
       - no-new-privileges:true
 
     cap_drop:
       - ALL
-
-volumes:
-  ocx-state:
-  codex-state:

@@ -1,8 +1,8 @@
 # Local secrets and generated state
 secrets/
+data/
 .env
 .env.*
-!.env.example
 
 # Editor / operating-system files
 .DS_Store
